@@ -271,6 +271,37 @@ select.a-input{cursor:pointer}
           </div>
         </div>
         <div class="card">
+          <div class="ctitle">🔊 Background &amp; Screen</div>
+          <div class="field" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <input type="checkbox" id="keepAwake" checked style="width:16px;height:16px;cursor:pointer">
+            <label for="keepAwake" style="margin:0;cursor:pointer">Keep TV screen awake (stop it sleeping)</label>
+          </div>
+          <div class="field" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <input type="checkbox" id="musicEnabled" checked style="width:16px;height:16px;cursor:pointer">
+            <label for="musicEnabled" style="margin:0;cursor:pointer">Play classical background sound</label>
+          </div>
+          <div class="row2">
+            <div>
+              <label>Background source</label>
+              <select class="a-input" id="musicMode" onchange="toggleMusicUrlRow()">
+                <option value="tanpura">Tanpura drone (built-in, no file)</option>
+                <option value="url">Custom audio URL (looped)</option>
+              </select>
+            </div>
+            <div>
+              <label>Volume</label>
+              <input type="range" min="0" max="100" value="35" id="musicVolume" class="a-input" style="padding:6px" oninput="setAmbienceVolume(this.value/100)">
+            </div>
+          </div>
+          <div class="field" id="musicUrlRow" style="display:none;margin-top:8px">
+            <label>Custom audio URL (use a royalty-free / public-domain track)</label>
+            <input type="text" class="a-input" id="musicUrl" placeholder="https://example.com/classical.mp3">
+          </div>
+          <div style="font-size:10px;color:#888;margin-top:8px;line-height:1.5">
+            On the TV, a one-time tap starts the sound (browsers block silent autoplay); the screen-awake video runs on its own. If the TV still sleeps, also disable its Eco / Sleep-timer / Screensaver in the TV's own menu.
+          </div>
+        </div>
+        <div class="card">
           <div class="ctitle" style="display:flex;justify-content:space-between;align-items:center">
             <span>👤 Visitor Details</span>
             <span id="editModeIndicator" style="display: flex; font-size: 9px; color: var(--gold); text-transform: none; letter-spacing: 0px; font-weight: normal; align-items: center; gap: 6px;">
@@ -562,6 +593,173 @@ var editingId = null;
 var cur = 0, timer = null;
 
 // ════════════ INIT ════════════
+// ════════════ TAMIL VERSE AUTO-FIT (keep couplets to their own lines) ════════════
+function fitQuoteVerse(scope){
+  if(!scope) return;
+  var lines = scope.querySelectorAll('.ta-line');
+  if(!lines.length) return;
+  var container = lines[0].parentNode;
+  var max = 56;
+  container.style.fontSize = max + 'px';
+  var avail = container.clientWidth;
+  if(!avail) return;
+  var widest = 0;
+  for(var i=0;i<lines.length;i++){ var w = lines[i].scrollWidth; if(w>widest) widest = w; }
+  if(widest > avail){
+    var size = Math.floor(max * (avail / widest) * 0.98);
+    if(size < 16) size = 16;
+    container.style.fontSize = size + 'px';
+  }
+}
+function scheduleFit(scope){ if(scope && window.requestAnimationFrame){ requestAnimationFrame(function(){ fitQuoteVerse(scope); }); } else { fitQuoteVerse(scope); } }
+
+// ════════════ KEEP-AWAKE + CLASSICAL BACKGROUND ════════════
+// Keeps the TV from sleeping (it powers off when it thinks nothing is playing):
+//   (a) Screen Wake Lock API, and (b) a tiny, silent, looping video that is always
+//   "playing" so the display treats the page as active media. Both run automatically.
+// Classical background: a synthesised tanpura drone (no audio file, plays forever) or a
+//   custom looped audio URL. Because browsers block silent autoplay, sound starts on the
+//   first tap (one-time on the TV); the screen-awake video needs no tap.
+var KEEPAWAKE_VIDEO = 'data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMsbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAB9AAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAlZ0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAB9AAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAEAAAABAAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAfQAAAAAAABAAAAAAHObWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAABAAAAAgABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABeW1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAATlzdGJsAAAAuXN0c2QAAAAAAAAAAQAAAKlhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAEAAQABIAAAASAAAAAAAAAABFUxhdmM2MC4zMS4xMDIgbGlieDI2NAAAAAAAAAAAAAAAGP//AAAAL2F2Y0MBQsAe/+EAF2dCwB7ZBCbARAAAAwAEAAADAAg8WLkgAQAFaMuDyyAAAAAQcGFzcAAAAAEAAAABAAAAFGJ0cnQAAAAAAAAKcAAACnAAAAAYc3R0cwAAAAAAAAABAAAAAgAAQAAAAAAUc3RzcwAAAAAAAAABAAAAAQAAABxzdHNjAAAAAAAAAAEAAAABAAAAAgAAAAEAAAAcc3RzegAAAAAAAAAAAAAAAgAAApIAAAAKAAAAFHN0Y28AAAAAAAAAAQAAA1wAAABidWR0YQAAAFptZXRhAAAAAAAAACFoZGxyAAAAAAAAAABtZGlyYXBwbAAAAAAAAAAAAAAAAC1pbHN0AAAAJal0b28AAAAdZGF0YQAAAAEAAAAATGF2ZjYwLjE2LjEwMAAAAAhmcmVlAAACpG1kYXQAAAJwBgX//2zcRem95tlIt5Ys2CDZI+7veDI2NCAtIGNvcmUgMTY0IHIzMTA4IDMxZTE5ZjkgLSBILjI2NC9NUEVHLTQgQVZDIGNvZGVjIC0gQ29weWxlZnQgMjAwMy0yMDIzIC0gaHR0cDovL3d3dy52aWRlb2xhbi5vcmcveDI2NC5odG1sIC0gb3B0aW9uczogY2FiYWM9MCByZWY9MyBkZWJsb2NrPTE6MDowIGFuYWx5c2U9MHgxOjB4MTExIG1lPWhleCBzdWJtZT03IHBzeT0xIHBzeV9yZD0xLjAwOjAuMDAgbWl4ZWRfcmVmPTEgbWVfcmFuZ2U9MTYgY2hyb21hX21lPTEgdHJlbGxpcz0xIDh4OGRjdD0wIGNxbT0wIGRlYWR6b25lPTIxLDExIGZhc3RfcHNraXA9MSBjaHJvbWFfcXBfb2Zmc2V0PS0yIHRocmVhZHM9MSBsb29rYWhlYWRfdGhyZWFkcz0xIHNsaWNlZF90aHJlYWRzPTAgbnI9MCBkZWNpbWF0ZT0xIGludGVybGFjZWQ9MCBibHVyYXlfY29tcGF0PTAgY29uc3RyYWluZWRfaW50cmE9MCBiZnJhbWVzPTAgd2VpZ2h0cD0wIGtleWludD0yNTAga2V5aW50X21pbj0xIHNjZW5lY3V0PTQwIGludHJhX3JlZnJlc2g9MCByY19sb29rYWhlYWQ9NDAgcmM9Y3JmIG1idHJlZT0xIGNyZj0yMy4wIHFjb21wPTAuNjAgcXBtaW49MCBxcG1heD02OSBxcHN0ZXA9NCBpcF9yYXRpbz0xLjQwIGFxPTE6MS4wMACAAAAAGmWIhAW///8PRQABT38nJyddddddddddddeAAAAABkGaOAr4Rg==';
+var _wakeLock = null;
+function requestWakeLock(){
+  try{
+    if ('wakeLock' in navigator && navigator.wakeLock && navigator.wakeLock.request){
+      navigator.wakeLock.request('screen').then(function(wl){
+        _wakeLock = wl;
+        wl.addEventListener('release', function(){});
+      }).catch(function(){});
+    }
+  }catch(e){}
+}
+function initKeepAwakeVideo(){
+  var v = document.getElementById('keepAwakeVideo');
+  if(!v){
+    v = document.createElement('video');
+    v.id = 'keepAwakeVideo';
+    v.muted = true; v.defaultMuted = true; v.loop = true;
+    v.setAttribute('muted',''); v.setAttribute('playsinline',''); v.setAttribute('webkit-playsinline',''); v.setAttribute('autoplay','');
+    v.style.cssText = 'position:fixed;right:0;bottom:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1;';
+    var s = document.createElement('source'); s.src = KEEPAWAKE_VIDEO; s.type = 'video/mp4';
+    v.appendChild(s);
+    document.body.appendChild(v);
+  }
+  var p = v.play(); if(p && p.catch) p.catch(function(){});
+}
+
+var _audioCtx=null, _masterGain=null, _droneTimer=null, _urlAudio=null, _ambienceStarted=false;
+function _vol(){ return (typeof boardData!=='undefined' && boardData.musicVolume!=null) ? Math.max(0,Math.min(1,Number(boardData.musicVolume))) : 0.35; }
+function _musicMode(){ return (typeof boardData!=='undefined' && boardData.musicMode) ? boardData.musicMode : 'tanpura'; }
+function _musicEnabled(){ return !(typeof boardData!=='undefined' && boardData.musicEnabled===false); }
+
+function startTanpura(){
+  var AC = window.AudioContext || window.webkitAudioContext;
+  if(!AC) return;
+  _audioCtx = new AC();
+  _masterGain = _audioCtx.createGain();
+  _masterGain.gain.value = _vol();
+  var delay = _audioCtx.createDelay(2.0); delay.delayTime.value = 0.33;
+  var fb = _audioCtx.createGain(); fb.gain.value = 0.30;
+  var wet = _audioCtx.createGain(); wet.gain.value = 0.22;
+  delay.connect(fb); fb.connect(delay);
+  _masterGain.connect(delay); delay.connect(wet);
+  _masterGain.connect(_audioCtx.destination);
+  wet.connect(_audioCtx.destination);
+  var Sa = 130.81;                              // C3
+  var cycle = [Sa*0.75, Sa, Sa, Sa*0.5];        // Pa(low) Sa Sa Sa(octave below) - classic tanpura cycle
+  var gap = 1.05, step = 0, nextT = _audioCtx.currentTime + 0.15;
+  function pluck(freq, t){
+    var o = _audioCtx.createOscillator(); o.type='sawtooth'; o.frequency.value=freq;
+    var o2 = _audioCtx.createOscillator(); o2.type='sine'; o2.frequency.value=freq*2;
+    var lp = _audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1500; lp.Q.value=6;
+    var g = _audioCtx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.85, t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0008, t+2.6);
+    o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(_masterGain);
+    o.start(t); o2.start(t); o.stop(t+2.7); o2.stop(t+2.7);
+  }
+  function schedule(){
+    if(!_audioCtx) return;
+    while(nextT < _audioCtx.currentTime + 0.6){ pluck(cycle[step % cycle.length], nextT); step++; nextT += gap; }
+  }
+  schedule();
+  _droneTimer = setInterval(schedule, 220);
+}
+function startUrlAudio(){
+  var url = (typeof boardData!=='undefined' && boardData.musicUrl) ? boardData.musicUrl : '';
+  if(!url){ startTanpura(); return; }
+  _urlAudio = document.getElementById('bgUrlAudio');
+  if(!_urlAudio){
+    _urlAudio = document.createElement('audio');
+    _urlAudio.id='bgUrlAudio'; _urlAudio.loop=true; _urlAudio.crossOrigin='anonymous'; _urlAudio.style.display='none';
+    document.body.appendChild(_urlAudio);
+  }
+  _urlAudio.src = url; _urlAudio.volume = _vol();
+  var p = _urlAudio.play(); if(p && p.catch) p.catch(function(){});
+}
+function startAmbience(){
+  if(_ambienceStarted || !_musicEnabled()) return;
+  _ambienceStarted = true;
+  try{ if(_musicMode()==='url') startUrlAudio(); else startTanpura(); }
+  catch(e){ _ambienceStarted = false; }
+}
+function resumeAmbience(){
+  try{
+    if(!_ambienceStarted) startAmbience();
+    if(_audioCtx && _audioCtx.resume) _audioCtx.resume();
+    if(_urlAudio){ var p=_urlAudio.play(); if(p&&p.catch) p.catch(function(){}); }
+  }catch(e){}
+}
+function setAmbienceVolume(v){
+  v = Math.max(0, Math.min(1, Number(v)||0));
+  if(_masterGain) _masterGain.gain.value = v;
+  if(_urlAudio) _urlAudio.volume = v;
+}
+function showTapOverlay(){
+  if(document.getElementById('tapToStart')) return;
+  var ov = document.createElement('div');
+  ov.id = 'tapToStart';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99990;display:flex;align-items:flex-end;justify-content:center;padding-bottom:6vh;background:transparent;cursor:pointer;';
+  ov.innerHTML = '<div style="font-family:\'DM Sans\',sans-serif;background:rgba(10,10,12,.80);border:1px solid rgba(245,196,0,.55);color:#F5C400;padding:14px 28px;border-radius:40px;font-size:clamp(13px,1.5vw,18px);letter-spacing:.4px;box-shadow:0 10px 44px rgba(0,0,0,.55);">♪  Tap anywhere to start the classical background</div>';
+  function go(){
+    requestWakeLock(); initKeepAwakeVideo(); resumeAmbience();
+    if(ov && ov.parentNode) ov.parentNode.removeChild(ov);
+    document.removeEventListener('click', go);
+    document.removeEventListener('keydown', go);
+    document.removeEventListener('touchstart', go);
+  }
+  ov.addEventListener('click', go);
+  document.addEventListener('keydown', go);
+  document.addEventListener('touchstart', go, {passive:true});
+  document.body.appendChild(ov);
+}
+function initAmbienceAndKeepAwake(){
+  var keep = !(typeof boardData!=='undefined' && boardData.keepAwake===false);
+  if(keep){
+    requestWakeLock();
+    initKeepAwakeVideo();
+    document.addEventListener('visibilitychange', function(){
+      if(document.visibilityState==='visible'){ requestWakeLock(); initKeepAwakeVideo(); }
+    });
+  }
+  if(_musicEnabled()){
+    startAmbience();
+    if(_audioCtx && _audioCtx.resume) _audioCtx.resume();
+    setTimeout(function(){
+      var playing = (_audioCtx && _audioCtx.state==='running') || (_urlAudio && !_urlAudio.paused && !_urlAudio.ended);
+      if(!playing) showTapOverlay();
+    }, 700);
+  }
+  if(window.addEventListener){
+    window.addEventListener('resize', function(){ fitQuoteVerse(document.querySelector('.slide.active')); });
+  }
+}
+function toggleMusicUrlRow(){
+  var m = document.getElementById('musicMode'); var row = document.getElementById('musicUrlRow');
+  if(m && row) row.style.display = (m.value==='url') ? 'block' : 'none';
+}
+
 window.onload = function() {
   // Always clear stale visitor data from localStorage — GitHub baked data is the source of truth
   try { localStorage.removeItem('hs_board'); } catch(e) {}
@@ -594,12 +792,14 @@ window.onload = function() {
       visitDate: today,
       visitEndDate: today,
       slideSpeed: boardData.slideSpeed || 20000,
+        keepAwake: boardData.keepAwake !== false, musicEnabled: boardData.musicEnabled !== false, musicMode: boardData.musicMode || 'tanpura', musicUrl: boardData.musicUrl || '', musicVolume: (boardData.musicVolume != null ? boardData.musicVolume : 0.35),
       companies: [{ name: '', visitors: [{ name: '', desig: '' }] }]
     };
     companies = boardData.companies;
   }
   
   buildAndStartShow();
+  initAmbienceAndKeepAwake();
   startLiveClock();
   fetchFreshServerData();
   setInterval(fetchFreshServerData, 2 * 60 * 1000); // refresh from GitHub every 2 minutes
@@ -611,6 +811,12 @@ window.onload = function() {
   document.getElementById('visitDate').value = boardData.visitDate;
   document.getElementById('visitEndDate').value = boardData.visitEndDate || '';
   document.getElementById('slideSpeed').value = boardData.slideSpeed || 20000;
+  if(document.getElementById('keepAwake')) document.getElementById('keepAwake').checked = (boardData.keepAwake !== false);
+  if(document.getElementById('musicEnabled')) document.getElementById('musicEnabled').checked = (boardData.musicEnabled !== false);
+  if(document.getElementById('musicMode')) document.getElementById('musicMode').value = boardData.musicMode || 'tanpura';
+  if(document.getElementById('musicUrl')) document.getElementById('musicUrl').value = boardData.musicUrl || '';
+  if(document.getElementById('musicVolume')) document.getElementById('musicVolume').value = Math.round((boardData.musicVolume!=null?boardData.musicVolume:0.35)*100);
+  if(typeof toggleMusicUrlRow==='function') toggleMusicUrlRow();
   
   var coName = '';
   currentVisitors = [];
@@ -697,6 +903,7 @@ function fetchFreshServerData() {
                 visitDate:    today,
                 visitEndDate: today,
                 slideSpeed: boardData.slideSpeed || 20000,
+        keepAwake: boardData.keepAwake !== false, musicEnabled: boardData.musicEnabled !== false, musicMode: boardData.musicMode || 'tanpura', musicUrl: boardData.musicUrl || '', musicVolume: (boardData.musicVolume != null ? boardData.musicVolume : 0.35),
                 companies: [{ name: '', visitors: [{ name: '', desig: '' }] }]
               };
             }
@@ -842,6 +1049,12 @@ function openAdmin() {
   document.getElementById('visitDate').value = boardData.visitDate;
   document.getElementById('visitEndDate').value = boardData.visitEndDate || '';
   document.getElementById('slideSpeed').value = boardData.slideSpeed || 20000;
+  if(document.getElementById('keepAwake')) document.getElementById('keepAwake').checked = (boardData.keepAwake !== false);
+  if(document.getElementById('musicEnabled')) document.getElementById('musicEnabled').checked = (boardData.musicEnabled !== false);
+  if(document.getElementById('musicMode')) document.getElementById('musicMode').value = boardData.musicMode || 'tanpura';
+  if(document.getElementById('musicUrl')) document.getElementById('musicUrl').value = boardData.musicUrl || '';
+  if(document.getElementById('musicVolume')) document.getElementById('musicVolume').value = Math.round((boardData.musicVolume!=null?boardData.musicVolume:0.35)*100);
+  if(typeof toggleMusicUrlRow==='function') toggleMusicUrlRow();
   
   editingId = boardData.id || null;
   var el = document.getElementById('editModeIndicator');
@@ -996,6 +1209,11 @@ function getFormData() {
     visitDate: document.getElementById('visitDate').value,
     visitEndDate: document.getElementById('visitEndDate').value || '',
     slideSpeed: parseInt(document.getElementById('slideSpeed').value),
+    keepAwake: document.getElementById('keepAwake') ? document.getElementById('keepAwake').checked : true,
+    musicEnabled: document.getElementById('musicEnabled') ? document.getElementById('musicEnabled').checked : true,
+    musicMode: document.getElementById('musicMode') ? document.getElementById('musicMode').value : 'tanpura',
+    musicUrl: document.getElementById('musicUrl') ? document.getElementById('musicUrl').value.trim() : '',
+    musicVolume: document.getElementById('musicVolume') ? (parseInt(document.getElementById('musicVolume').value)/100) : 0.35,
     companies: [
       { name: coName, visitors: visitors }
     ]
@@ -2500,11 +2718,11 @@ function shuffleArray(arr) {
 function renderQuoteHTML(q) {
   if (q && q.lang === 'ta') {
     var label = WORK_LABELS[q.work] || 'தமிழ் இலக்கியம்';
-    var verse = (q.lines || []).join('<br>');
+    var verse = (q.lines || []).map(function(L){ return '<div class="ta-line" style="white-space:nowrap;display:block;text-align:center;">' + L + '</div>'; }).join('');
     var attribution = '— ' + (q.author || '') + (q.ref ? ' · ' + q.ref : '');
     return '' +
       '<div class="wlabel" style="color:#F5C400;letter-spacing:5px;font-size:clamp(12px,1.4vw,17px);">' + label + '</div>' +
-      '<div style="font-family:\'Noto Serif Tamil\',serif;font-weight:600;font-size:clamp(30px,4.8vw,58px);line-height:1.5;max-width:1150px;margin:22px auto 16px;color:#f5f5f5;text-shadow:0 0 70px rgba(245,196,0,.12);">' + verse + '</div>' +
+      '<div style="font-family:\'Noto Serif Tamil\',serif;font-weight:600;font-size:clamp(30px,4.8vw,58px);line-height:1.5;max-width:min(1700px,94vw);margin:22px auto 16px;color:#f5f5f5;text-shadow:0 0 70px rgba(245,196,0,.12);">' + verse + '</div>' +
       '<div style="font-family:\'Cormorant Garamond\',serif;font-style:italic;font-size:clamp(17px,2vw,27px);color:#d2d2d2;max-width:860px;margin:0 auto 22px;line-height:1.45;">' + q.meaning + '</div>' +
       '<div style="font-family:\'Noto Serif Tamil\',serif;font-size:clamp(15px,1.5vw,21px);letter-spacing:1px;color:#F5C400;">' + attribution + '</div>';
   }
@@ -2585,6 +2803,7 @@ function buildAndStartShow() {
   }
   window._validCount = displaySlides.length;
   window._speed = speed;
+  scheduleFit(document.getElementById('slide_0'));
 }
 function buildDots(n) {
   var dotsEl = document.getElementById('dots');
@@ -2623,6 +2842,7 @@ function goTo(n, total, speed) {
 
   if (prev && n!==cur) { prev.className='slide leaving'; (function(p){ setTimeout(function(){ if(p) p.className='slide'; },500); })(prev); }
   if (next) next.className='slide active entering';
+  scheduleFit(next);
   cur = n; updateDots();
   if (total>1) {
     if (timer) { clearTimeout(timer); timer = null; }
@@ -2830,6 +3050,11 @@ function getTodayMergedBoardData() {
     visitDate: today,
     visitEndDate: today,
     slideSpeed: parseInt(document.getElementById('slideSpeed').value),
+    keepAwake: document.getElementById('keepAwake') ? document.getElementById('keepAwake').checked : true,
+    musicEnabled: document.getElementById('musicEnabled') ? document.getElementById('musicEnabled').checked : true,
+    musicMode: document.getElementById('musicMode') ? document.getElementById('musicMode').value : 'tanpura',
+    musicUrl: document.getElementById('musicUrl') ? document.getElementById('musicUrl').value.trim() : '',
+    musicVolume: document.getElementById('musicVolume') ? (parseInt(document.getElementById('musicVolume').value)/100) : 0.35,
     companies: []
   };
 
